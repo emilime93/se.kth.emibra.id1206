@@ -1,0 +1,20 @@
+=== Startup & MBR ===
+1. First the computer will do some system testing.
+2. The BIOS looks for the primary disk and the MBR (Master Boot Record).
+   This is the first 512 bytes of the disk.
+3. The MBR will probably start executing a boot loader (or any other larger program)
+
+=== BOOT LOADER ===
+- Knows about file system
+- GRUB is a bootloader
+
+=== Operating System ===
+Now a OS will take over the system and:
+- Switch to 64-bit mode
+- Create a stack
+- Set up the interrupt descriptor table
+- Initialize the virtual memory
+- Organize the task scheduler
+- Set up the File System
+......
+A large OS is divided into modules, and only some are needed to boot.
