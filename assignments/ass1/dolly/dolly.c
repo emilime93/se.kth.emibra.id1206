@@ -4,7 +4,6 @@
 #include <sys/wait.h>
 
 int main(int argc, char *argv[]) {
-    
     int pid = fork();
 
     if (pid == 0) {
@@ -13,6 +12,5 @@ int main(int argc, char *argv[]) {
         printf("I'm the child %d with parent %d\n", getpid(), getppid());
         wait(NULL);
     }
-
     return 0;
 }
