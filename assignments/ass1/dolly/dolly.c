@@ -8,12 +8,17 @@ int main(int argc, char *argv[]) {
     int rc = fork();
 
     if (rc == 0) {
-        printf("I'm the child: %d\n", getpid());
-        sleep(3);
+        printf("check the status");
+        sleep(10);
+        printf("and again\n");
+        return 42;
     } else {
-        printf("My child is called: %d\n", rc);
-        wait(NULL);
-        printf("My child has died\n");
+        sleep(20);
+        int res;
+        wait(&res);
+        printf("the result was %d\n", WEXITSTATUS(res));
+        printf("and again\n");
+        sleep(10);
     }
 
     return 0;
