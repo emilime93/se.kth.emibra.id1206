@@ -4,21 +4,14 @@
 #include <sys/wait.h>
 
 int main(int argc, char *argv[]) {
-    printf("pre fork, parent id: %d\n", getpid());
-    int rc = fork();
+    
+    int pid = fork();
 
-    if (rc == 0) {
-        printf("check the status");
-        sleep(10);
-        printf("and again\n");
-        return 42;
+    if (pid == 0) {
+        printf("I'm the child %d with parent %d\n", getpid(), getppid());
     } else {
-        sleep(20);
-        int res;
-        wait(&res);
-        printf("the result was %d\n", WEXITSTATUS(res));
-        printf("and again\n");
-        sleep(10);
+        printf("I'm the child %d with parent %d\n", getpid(), getppid());
+        wait(NULL);
     }
 
     return 0;
