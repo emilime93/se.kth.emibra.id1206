@@ -15,8 +15,8 @@ start:
     ; We will use a BIOS prodecure to print characters
     ; by placing to the [?] in the SI (Source Register)
 
-    mov si, msg             ; pointer to the message in SI
-    mov ah, 0x0E            ; print char BIOS procedure
+    mov si, msg         ; pointer to the message in SI
+    mov ah, 0x0E        ; print char BIOS procedure
 
 ; The printing procedure
 .next:
