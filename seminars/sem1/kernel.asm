@@ -11,14 +11,15 @@ global start
 section .text
 bits 32
 start:
-    mov dword [0xB8000], 0x2f6D2f45         ; prints to the screen
-    mov dword [0xB8004], 0x2f6C2f69         ; prints to the screen
-    mov dword [0xB8008], 0x2f4F2f20
-    mov dword [0xB800C], 0x2f002f53
-    mov dword [0xB8010], 0x2f432f28
-    mov dword [0xB8014], 0x00002f29
+    mov dword [0xB8000], 0x2f6D2f45         ; M E
+    mov dword [0xB8004], 0x2f6C2f69         ; L I
+    mov dword [0xB8008], 0x2f4F2f20         ; O _
+    mov dword [0xB800C], 0x2f002f53         ; _ S
+    mov dword [0xB8010], 0x2f432f28         ; C (
+    mov dword [0xB8014], 0x00002f29         ;   )
     hlt
 
+; EMIL OS (C)
 ; Emil = 45 6D 69 6C
 ; 20 = space
 ; OS = 4f 53
