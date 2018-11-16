@@ -5,6 +5,7 @@
 ; Each character is 2 bytes
 ; Each byte looks like this:
 ; {1 bit blinking}{3 bits background}{4 bits color} | {character code}
+; {extra färg}
 
 global start
 
