@@ -7,7 +7,7 @@
 int done = 0;
 
 void handler(int sig, siginfo_t *siginfo, void *context) {
-    printf("signal %d was caight\n", sig);
+    printf("\nsignal %d was caight\n", sig);
     printf("your UID is %d\n", siginfo->si_uid);
     printf("your PID is %d\n", siginfo->si_pid);
 

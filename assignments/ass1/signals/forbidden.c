@@ -4,7 +4,7 @@
 #include <signal.h>
 #include <ucontext.h>
 
-static void handler (int sig_no, siginfo_t* info, void *cntx) {
+static void handler(int sig_no, siginfo_t* info, void *cntx) {
     ucontext_t *context = (ucontext_t*) cntx;
     unsigned long pc = context->uc_mcontext.gregs[REG_RIP];
 
