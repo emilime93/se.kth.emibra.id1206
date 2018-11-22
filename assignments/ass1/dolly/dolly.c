@@ -4,13 +4,19 @@
 #include <sys/wait.h>
 
 int main(int argc, char *argv[]) {
-    int pid = fork();
+    int x = 123;
+    int rc = fork();
 
-    if (pid == 0) {
-        printf("I'm the child %d with parent %d\n", getpid(), getppid());
+    if (rc == 0) {
+        printf("child: x is %d\n", x);
+        x = 42;
+        sleep(1);
+        printf("child: x is %d\n", x);
     } else {
-        printf("I'm the child %d with parent %d\n", getpid(), getppid());
-        wait(NULL);
+        printf("mother: x is %d\n", x);
+        x = 13;
+        sleep(1);
+        printf("mother: x is %d\n", x);
     }
     return 0;
 }
