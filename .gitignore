@@ -3,3 +3,10 @@
 *.o
 *.txt
 *.pdf
+*.cmd
+.tmp_versions
+*.ko
+*.mod.c
+*.symvers
+*.order
+*.mk
