@@ -173,7 +173,6 @@ void split_up(int level, int goal) {
 
 /* fetches a block of the level specified in the parameter */
 struct head *find(int level) {
-    printf("find\n");
     if (flists[level] == NULL) {
         if (level == LEVELS - 1) {
             printf("Allocating all new memory!\n");
