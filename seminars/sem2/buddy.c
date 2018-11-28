@@ -31,6 +31,7 @@ struct head {
     struct head *prev;
 };
 
+/* request a page of memory from the OS */
 struct head *new() {
     struct head *new = (struct head*) mmap(NULL, PAGE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     
@@ -44,6 +45,7 @@ struct head *new() {
     return new;
 }
 
+/* gives a page of memory back to the os */
 void reclaim_mem(struct head *block) {
     int rc = munmap((void *) block, PAGE);
     if (rc != 0) {
@@ -194,6 +196,7 @@ struct head *find(int level) {
     return alloc;
 }
 
+/* recursively merges blocks with their "buddies" to reclaim larger blocks */
 void merge(struct head *block) {
     if (block->level == LEVELS - 1) {
         link_block(block);
@@ -229,7 +232,6 @@ void insert(struct head *block) {
         }
     }
 }
-
 
 void test_headers(struct head *mem) {
     if (mem == NULL) {
