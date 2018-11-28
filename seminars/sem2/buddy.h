@@ -1,2 +1,2 @@
-void test();
-void test2();
+void test_balloc();
+void test_malloc();

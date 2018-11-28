@@ -174,8 +174,7 @@ void split_up(int level, int goal) {
 /* fetches a block of the level specified in the parameter */
 struct head *find(int level) {
     if (flists[level] == NULL) {
-        if (level == LEVELS - 1) {
-            printf("Allocating all new memory!\n");
+        if (level == LEVELS - 1) { // Allocating new memory
             insert(new());
         } else {
             int lvl_w_mem = level + 1;
@@ -290,9 +289,8 @@ void workload(void * (*allocator)(size_t), void (*freeing)(void *)) {
     void *binaries1 = (*allocator)(1000);
     void *binaries2 = (*allocator)(1000);
     void *binaries3 = (*allocator)(2000);
-    // print_mem();
-    printf(">here<\n");
     void *binaries4 = (*allocator)(1000);
+    void *biggest = (*allocator)(4000);
     char *small1 = (*allocator)(10);
     char *small2 = (*allocator)(10);
     char *small3 = (*allocator)(10);
@@ -302,31 +300,37 @@ void workload(void * (*allocator)(size_t), void (*freeing)(void *)) {
     (*freeing)(small1);
     (*freeing)(small2);
     (*freeing)(small3);
+    (*freeing)(biggest);
     (*freeing)(binaries1);
     (*freeing)(binaries2);
     (*freeing)(binaries3);
     (*freeing)(binaries4);
 }
 
-void test() {
+void test_balloc(int rounds) {
     insert(new()); // KEEP HERE
 
-    // MALLOC AND FREE
-    struct timeval malloc_stop, malloc_start;
-    gettimeofday(&malloc_start, NULL);
     
-    workload(malloc, free);
+    for(int i = 0; i < rounds; i++) {
+        struct timeval balloc_stop, balloc_start;
+        gettimeofday(&balloc_start, NULL);
+        
+        workload(balloc, bfree);
+
+        gettimeofday(&balloc_stop, NULL);
+        printf("%d\n", balloc_stop.tv_usec - balloc_start.tv_usec);
+    }
     
-    gettimeofday(&malloc_stop, NULL);
-    printf("malloc took %d\n", malloc_stop.tv_usec - malloc_start.tv_usec);
+}
 
-    // BALLOC AND BE FREE
-    struct timeval balloc_stop, balloc_start;
-    gettimeofday(&balloc_start, NULL);
-    
-    workload(balloc, bfree);
-
-    gettimeofday(&balloc_stop, NULL);
-    printf("balloc took %d\n", balloc_stop.tv_usec - balloc_start.tv_usec);
-
+void test_malloc(int rounds) {
+    for (int i = 0; i < rounds; i++) {
+        struct timeval malloc_stop, malloc_start;
+        gettimeofday(&malloc_start, NULL);
+        
+        workload(malloc, free);
+        
+        gettimeofday(&malloc_stop, NULL);
+        printf("%d\n", malloc_stop.tv_usec - malloc_start.tv_usec);
+    }
 }
