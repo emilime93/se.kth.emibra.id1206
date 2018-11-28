@@ -10,3 +10,4 @@
 *.symvers
 *.order
 *.mk
+*.out

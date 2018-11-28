@@ -120,6 +120,32 @@ void bfree(void *memory) {
     return;
 }
 
+/* Strictly removes a block from its level in the list, and relinks the others */
+void unlink_block(struct head *block) {
+    if(block->prev == NULL) { // It was the first in list
+        if (block->next != NULL) { // Is there is something more in line
+            flists[block->level] = block->next;
+            flists[block->level]->prev = NULL;
+        } else {
+            flists[block->level] = NULL;
+        }
+    } else { // Link me out from the middle of a sandwhich
+        block->prev->next = block->next;
+        block->next->prev = block->prev;
+    }
+}
+
+/* Strictly inserts a block in the beginning of a linled list, at the level that the block has */
+void link_block(struct head *block) {
+    int level = block->level;
+    block->next = flists[level];
+    if (flists[level] != NULL) {
+        flists[level]->prev = block;
+    }
+    flists[level] = block;
+    block->prev = NULL;
+}
+
 /* splits up the blocks from level-level to goal */
 /* first level guaranteed by caller to have a block */
 /* and subsequent levels are by logic guaranteed to contain data */
@@ -127,27 +153,18 @@ void split_up(int level, int goal) {
     if (level <= goal) {
         return;
     }
-    // Unlink the block from list, and split it up
+    // Unlink the block from list
     struct head *block = flists[level];
-    flists[level] = flists[level]->next;
-    if (flists[level] != NULL) {
-        flists[level]->prev = NULL;
-    }
-    struct head *supl = split(block);
-    // Link these into the lower level.
-    block->prev = NULL;
-    block->next = flists[block->level];
-    if (flists[block->level] != NULL) {
-        flists[block->level]->prev = block;
-    }
-    flists[block->level] = block;
+    unlink_block(block);
 
-    supl->prev = NULL;
-    supl->next = flists[supl->level];
-    if (flists[supl->level] != NULL) {
-        flists[supl->level]->prev = supl;
-    }
-    flists[block->level] = supl;
+    // Split it up
+    struct head *supl = split(block);
+
+    // Link these into the lower level.
+    link_block(supl);
+    link_block(block);
+    
+    // Continue
     split_up(level - 1, goal);
 }
 
@@ -166,52 +183,50 @@ struct head *find(int level) {
         split_up(lvl_w_mem, level);
     }
     struct head *alloc = flists[level];
-    flists[level] = flists[level]->next;
-    if (flists[level] != NULL) {
-        flists[level]->prev = NULL;
-    }
+    unlink_block(alloc);
     alloc->status = Taken;
-    alloc->next = NULL;
 
-    // return hide(alloc);
     return alloc;
 }
 
-void insert(struct head *mem) {
-    if (mem->level == LEVELS-1) { // 4KB block
+void merge(struct head *block) {
+
+}
+
+void insert(struct head *block) {
+    if (block->level == LEVELS-1) { // 4KB block
         printf("!!!4KB BLOCK!!!\nthe block should be destoryed/split up/reclaimed by the OS\n");
-        int level = mem->level;
-        mem->prev = NULL;
-        mem->next = flists[level];
+        int level = block->level;
+        block->prev = NULL;
+        block->next = flists[level];
         if (flists[level] != NULL) {
-            flists[level]->prev = mem;
+            flists[level]->prev = block;
         }
-        flists[level] = mem;
+        flists[level] = block;
     } else {
-        struct head *friend = buddy(mem);
-        if (friend->status == Taken || 1==1) { // No free buddy
-            int level = mem->level;
-            mem->prev = NULL;
-            mem->next = flists[level];
+        struct head *friend = buddy(block);
+        if (friend->status == Taken) { // No free buddy
+            int level = block->level;
+            block->prev = NULL;
+            block->next = flists[level];
             if (flists[level] != NULL) {
-                flists[level]->prev = mem;
+                flists[level]->prev = block;
             }
-            flists[level] = mem;
+            flists[level] = block;
         } else {                    // Has a free buddy - merge time!
-            // You got one friend
-            // you got the buddy as well
             // remove both from their lists
-            if(mem->prev == NULL) { // It was the first in list
-                flists[mem->level] = mem->next;
-                if (flists[mem->level] != NULL) {
-                    flists[mem->level]->prev = NULL;
-                }
-            }
-            // grab the primary with primary(friend)
+            // PRIMARY
+            unlink_block(block);
+            unlink_block(friend);
+
+            // grab the primary(merged) with primary(friend)
+            struct head *merged = primary(friend);
+            link_block(merged);
             // link it into its list
         }
     }
 }
+
 
 void test_headers(struct head *mem) {
     if (mem == NULL) {
@@ -282,6 +297,7 @@ void test() {
 }
 
 void test2() {
+    printf("==== Inserted a new blcok ====");
     insert(new());
     print_mem();
     char *myMem = balloc(20*sizeof(int));
@@ -290,7 +306,6 @@ void test2() {
     printf("=== HEADER TESTS ===\n");
     test_headers(magic(myMem));
     print_mem();
-    printf(" > > > FREEING\n");
     bfree(myMem);
     print_mem();
 }
