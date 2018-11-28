@@ -3,7 +3,6 @@
 
 int main(int argc, char const *argv[])
 {
-    // test();
-    test2();
+    test();
     return 0;
 }

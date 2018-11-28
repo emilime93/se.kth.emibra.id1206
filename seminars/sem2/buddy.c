@@ -8,6 +8,7 @@
 #include <strings.h>
 #endif
 #include <math.h>
+#include <sys/time.h>
 
 #define MIN 5
 #define LEVELS 8
@@ -96,7 +97,6 @@ int level(int req) {
 }
 /* allocate a block */
 void *balloc(size_t size) {
-    printf("balloc\n");
     if (size == 0) {
         return NULL;
     }
@@ -173,6 +173,7 @@ void split_up(int level, int goal) {
 
 /* fetches a block of the level specified in the parameter */
 struct head *find(int level) {
+    printf("find\n");
     if (flists[level] == NULL) {
         if (level == LEVELS - 1) {
             printf("Allocating all new memory!\n");
@@ -181,6 +182,10 @@ struct head *find(int level) {
             int lvl_w_mem = level + 1;
             while(flists[lvl_w_mem] == NULL && lvl_w_mem < LEVELS) {
                 lvl_w_mem++;
+            }
+            if (lvl_w_mem >= LEVELS) {
+                insert(new());
+                lvl_w_mem = LEVELS-1;
             }
             split_up(lvl_w_mem, level);
         }
@@ -271,36 +276,6 @@ void print_mem() {
     }
 }
 
-void test() {
-    // Test the headers
-    printf("\n=== Create ===\n");
-    struct head *mem = new();
-    test_headers(mem);
-    printf("\n=== Obfuscate ===\n");
-    struct head *obfsk_mem = (struct head *) hide(mem);
-    test_headers(obfsk_mem);
-    printf("\n=== Recover ===\n");
-    struct head *recovered_mem = (struct head *) magic(obfsk_mem);
-    test_headers(recovered_mem);
-
-    // Divide it
-    printf("\n=== Splitting ===\n");
-    struct head *halved = split(mem);
-    test_headers(mem);
-    test_headers(halved);
-    
-    printf("\n=== Splitting AGAIN ===\n");
-    struct head *quarter = split(halved);
-    printf("quarter:\n");
-    test_headers(quarter);
-    printf("halve:\n");
-    test_headers(halved);
-
-    printf("\n=== Primary ===\n");
-    struct head *prim = primary(quarter);
-    test_headers(prim);
-}
-
 void dyn_inter_alloc() {
     int mem_size = 0;
     do {
@@ -311,47 +286,48 @@ void dyn_inter_alloc() {
     } while(mem_size);
 }
 
-void test2() {
-    insert(new());
-    dyn_inter_alloc();
+void workload(void * (*allocator)(size_t), void (*freeing)(void *)) {
+    char *str = (*allocator)(90*sizeof(char));
+    void *binaries1 = (*allocator)(1000);
+    void *binaries2 = (*allocator)(1000);
+    void *binaries3 = (*allocator)(2000);
+    // print_mem();
+    printf(">here<\n");
+    void *binaries4 = (*allocator)(1000);
+    char *small1 = (*allocator)(10);
+    char *small2 = (*allocator)(10);
+    char *small3 = (*allocator)(10);
+    // strcpy(str, "hejan därhehe");
+    // printf("my pointer=%p, containing: %s\n", str, str);
+    (*freeing)(str);
+    (*freeing)(small1);
+    (*freeing)(small2);
+    (*freeing)(small3);
+    (*freeing)(binaries1);
+    (*freeing)(binaries2);
+    (*freeing)(binaries3);
+    (*freeing)(binaries4);
+}
 
-    char *str1 = balloc(sizeof(char) * 50);
-    print_mem();
+void test() {
+    insert(new()); // KEEP HERE
 
-    char *str2 = balloc(sizeof(char) * 700);
-    print_mem();
-
-    char *str3 = balloc(sizeof(char) * 8);
-    print_mem();
-
-    char *str4 = balloc(sizeof(char) * 200);
-    print_mem();
-
-    char *str5 = balloc(sizeof(char) * 20);
-    print_mem();
-
-    char *str6 = balloc(sizeof(char) * 50);
-    print_mem();
+    // MALLOC AND FREE
+    struct timeval malloc_stop, malloc_start;
+    gettimeofday(&malloc_start, NULL);
     
-    char *str7 = balloc(sizeof(char) * 40);
-    print_mem();
+    workload(malloc, free);
+    
+    gettimeofday(&malloc_stop, NULL);
+    printf("malloc took %d\n", malloc_stop.tv_usec - malloc_start.tv_usec);
 
-    printf("-----------------------------------------------------------------");
-    bfree(str7);
-    print_mem();
-    printf("-----------------------------------------------------------------");
-    bfree(str1);
-    print_mem();
-    printf("-----------------------------------------------------------------");
-    bfree(str6);
-    print_mem();
-    printf("-----------------------------------------------------------------");
-    bfree(str5);
-    print_mem();
-    printf("-----------------------------------------------------------------");
-    bfree(str4);
-    print_mem();
-    printf("-----------------------------------------------------------------");
-    bfree(str3);
-    print_mem();
+    // BALLOC AND BE FREE
+    struct timeval balloc_stop, balloc_start;
+    gettimeofday(&balloc_start, NULL);
+    
+    workload(balloc, bfree);
+
+    gettimeofday(&balloc_stop, NULL);
+    printf("balloc took %d\n", balloc_stop.tv_usec - balloc_start.tv_usec);
+
 }
