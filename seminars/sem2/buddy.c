@@ -16,6 +16,7 @@
 struct head *find(int index);
 void insert(struct head*);
 void test_headers(struct head*);
+void print_lvl(int);
 void print_mem();
 
 struct head *flists[LEVELS] = {NULL};
@@ -33,6 +34,7 @@ struct head *new() {
     struct head *new = (struct head*) mmap(NULL, PAGE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     
     if (new == MAP_FAILED) {
+        printf("MMAP failed.\n");
         return NULL;
     }
     assert(((long int)new & 0xfff) == 0); // last 12 bits should be zero
@@ -41,6 +43,15 @@ struct head *new() {
     return new;
 }
 
+void reclaim_mem(struct head *block) {
+    int rc = munmap((void *) block, PAGE);
+    if (rc != 0) {
+        printf("Couldn't reclaim memory to to OS\n");
+        exit(1);
+    }
+}
+
+/* Returns the buddy block independently of if its the primary or suplementary one pair */
 struct head *buddy(struct head *block) {
     int index = block->level;
     long int mask = 0x1 << (MIN + index);
@@ -49,30 +60,16 @@ struct head *buddy(struct head *block) {
 
 /* returns the address to the secondary block with correct headers, and sets the main block headers */
 struct head *split(struct head *block) {
-    if (block == NULL) {
-        printf("ERROR IN SPLIT, block == NULL!!!!!!!\n");
-        exit(1);
-    }
     int index = block->level - 1;
     int mask = 0x1 << (index + MIN);
-    struct head *split = (struct head*) ((long int) block | mask);
-    split->level = index;
-    split->status = Free;
-    block->level = index;
-    return split;
+    return (struct head*) ((long int) block | mask);
 }
 
+/* Returns the primary block from any of the pair blocks */
 struct head *primary(struct head *block) {
-    if (block == NULL) {
-        printf("ERROR IN PRIMARY, block == NULL!!!!!!!\n");
-        exit(1);
-    }
     int index = block->level;
     long int mask = 0xffffffffffffffff << (MIN + index + 1);
-    // Remove this maybe??
-    struct head *prim = (struct head*) ((long int) block & mask);
-    prim->level = index + 1;
-    return prim;
+    return (struct head*) ((long int) block & mask);
 }
 
 /* Gives the address to the next address to hide access to the header */
@@ -80,10 +77,7 @@ void *hide(struct head* block) {
     return (void *) (block + 1 );
 }
 
-/* Backs the address one step in order to retrive the header from a block */
-// struct head *magic(struct head* memory) {
-//     return ((struct head*) memory - 1);
-// }
+/* Decrements the address one step in order to retrive the header from a block */
 struct head *magic(void* memory) {
     return ((struct head*) memory - 1);
 }
@@ -102,11 +96,11 @@ int level(int req) {
 }
 /* allocate a block */
 void *balloc(size_t size) {
+    printf("balloc\n");
     if (size == 0) {
         return NULL;
     }
     int index = level(size);
-    printf("I need to allocate level %d (%zu B) memory\n", index, size);
     struct head *taken = find(index);
     return hide(taken);
 }
@@ -129,9 +123,13 @@ void unlink_block(struct head *block) {
         } else {
             flists[block->level] = NULL;
         }
-    } else { // Link me out from the middle of a sandwhich
-        block->prev->next = block->next;
-        block->next->prev = block->prev;
+    } else { // Not first..
+        if (block->next == NULL) { // I'm last
+            block->prev->next = NULL;
+        } else { // Link me out from the middle of a sandwhich
+            block->next->prev = block->prev;
+            block->prev->next = block->next;
+        }
     }
 }
 
@@ -142,23 +140,28 @@ void link_block(struct head *block) {
     if (flists[level] != NULL) {
         flists[level]->prev = block;
     }
-    flists[level] = block;
     block->prev = NULL;
+    flists[level] = block;
 }
 
 /* splits up the blocks from level-level to goal */
 /* first level guaranteed by caller to have a block */
 /* and subsequent levels are by logic guaranteed to contain data */
 void split_up(int level, int goal) {
-    if (level <= goal) {
+    if (level == goal) {
         return;
     }
     // Unlink the block from list
     struct head *block = flists[level];
     unlink_block(block);
 
+
     // Split it up
     struct head *supl = split(block);
+    supl->level = block->level - 1;
+    supl->status = Free;
+    
+    block->level--;
 
     // Link these into the lower level.
     link_block(supl);
@@ -168,62 +171,56 @@ void split_up(int level, int goal) {
     split_up(level - 1, goal);
 }
 
-/* fetches a  */
+/* fetches a block of the level specified in the parameter */
 struct head *find(int level) {
     if (flists[level] == NULL) {
-        int lvl_w_mem = level + 1;
-        while(flists[lvl_w_mem] == NULL && lvl_w_mem < LEVELS) {
-            lvl_w_mem++;
+        if (level == LEVELS - 1) {
+            printf("Allocating all new memory!\n");
+            insert(new());
+        } else {
+            int lvl_w_mem = level + 1;
+            while(flists[lvl_w_mem] == NULL && lvl_w_mem < LEVELS) {
+                lvl_w_mem++;
+            }
+            split_up(lvl_w_mem, level);
         }
-        if (lvl_w_mem == LEVELS + 1) {
-            //TODO: Allocate more memory with MMAP
-            printf("need to allocate more memory!\n");
-            exit(1);
-        }
-        split_up(lvl_w_mem, level);
     }
     struct head *alloc = flists[level];
     unlink_block(alloc);
     alloc->status = Taken;
-
     return alloc;
 }
 
 void merge(struct head *block) {
-    if (block->level == LEVELS-1) {
-        printf("max level reached\n");
+    if (block->level == LEVELS - 1) {
+        link_block(block);
         return;
     }
-    struct head *bud = buddy(block);
-    if (bud->status == Free) {
-        unlink_block(block);
-        unlink_block(bud);
+    if (buddy(block)->status == Free) {
+        unlink_block(buddy(block));
         struct head *prim = primary(block);
-        link_block(prim);
+        prim->level++;
+        prim->status = Free;
         merge(prim);
+    } else {
+        link_block(block);
     }
 }
 
+/* Sets a block status to free, and links it into the structure */
 void insert(struct head *block) {
-    if (block->level == LEVELS-1) { // 4KB block
-        printf("!!!4KB BLOCK!!!\nthe block should be destoryed/split up/reclaimed by the OS\n");
-        int level = block->level;
-        block->prev = NULL;
-        block->next = flists[level];
-        if (flists[level] != NULL) {
-            flists[level]->prev = block;
+    if (block->level == LEVELS - 1) { // 4KB block
+        if (flists[block->level] == NULL) {
+            block->status = Free;
+            link_block(block);
+        } else {
+            printf("Extra 4KB block. Reclaiming to the OS\n");
+            reclaim_mem(block);
         }
-        flists[level] = block;
     } else {
-        struct head *friend = buddy(block);
-        if (friend->status == Taken) { // No free buddy
-            int level = block->level;
-            block->prev = NULL;
-            block->next = flists[level];
-            if (flists[level] != NULL) {
-                flists[level]->prev = block;
-            }
-            flists[level] = block;
+        if (buddy(block)->status == Taken) { // No free buddy
+            block->status = Free;
+            link_block(block);
         } else {                    // Has a free buddy - merge time!
             merge(block);
         }
@@ -254,18 +251,23 @@ void test_headers(struct head *mem) {
     /* BEWARE THE VISUAL HAX FOR EVEN BORDERS B) */
 }
 
-void print_mem() {
-    int i;
+void print_lvl(int lvl) {
+    printf("\nLevel %d: \n", lvl);
     struct head *curr;
-    for (i = 0 ; i < LEVELS; i++) {
-        printf("\nLevel %d: \n", i);
-        if (flists[i] != NULL) {
-            curr = flists[i];
-            while (curr != NULL) {
-                test_headers(curr);
-                curr = curr->next;
-            }
+    if (flists[lvl] != NULL) {
+        curr = flists[lvl];
+        while (curr != NULL) {
+            test_headers(curr);
+            curr = curr->next;
         }
+    }
+}
+
+void print_mem() {
+    printf("\n=== MEMORY STRUCTURE ===\n");
+    int i;
+    for (i = 0 ; i < LEVELS; i++) {
+        print_lvl(i);
     }
 }
 
@@ -311,38 +313,45 @@ void dyn_inter_alloc() {
 
 void test2() {
     insert(new());
-    print_mem();
     dyn_inter_alloc();
-    // int memsize = 2;
-    // printf("Allocating %d B of memory (lvl %d", memsize, level(memsize));
-    // balloc(memsize);
-    // memsize = 16;
-    // printf("Allocating %d B of memory (lvl %d", memsize, level(memsize));
-    // balloc(memsize);
-    // memsize = 40;
-    // printf("Allocating %d B of memory (lvl %d", memsize, level(memsize));
-    // balloc(memsize);
-    // memsize = 100;
-    // printf("Allocating %d B of memory (lvl %d", memsize, level(memsize));
-    // balloc(memsize);
-    // memsize = 300;
-    // printf("Allocating %d B of memory (lvl %d", memsize, level(memsize));
-    // balloc(memsize);
-    // memsize = 800;
-    // printf("Allocating %d B of memory (lvl %d", memsize, level(memsize));
-    // balloc(memsize);
-    // memsize = 1000;
-    // print_mem();
+
+    char *str1 = balloc(sizeof(char) * 50);
+    print_mem();
+
+    char *str2 = balloc(sizeof(char) * 700);
+    print_mem();
+
+    char *str3 = balloc(sizeof(char) * 8);
+    print_mem();
+
+    char *str4 = balloc(sizeof(char) * 200);
+    print_mem();
+
+    char *str5 = balloc(sizeof(char) * 20);
+    print_mem();
+
+    char *str6 = balloc(sizeof(char) * 50);
+    print_mem();
     
-    // printf("==== Inserted a new blcok ====");
-    // insert(new());
-    // print_mem();
-    // char *myMem = balloc(20*sizeof(int));
-    // strcpy(myMem, "hejsan");
-    // printf("meddelande: %s\n", myMem);
-    // printf("=== HEADER TESTS ===\n");
-    // test_headers(magic(myMem));
-    // print_mem();
-    // bfree(myMem);
-    // print_mem();
+    char *str7 = balloc(sizeof(char) * 40);
+    print_mem();
+
+    printf("-----------------------------------------------------------------");
+    bfree(str7);
+    print_mem();
+    printf("-----------------------------------------------------------------");
+    bfree(str1);
+    print_mem();
+    printf("-----------------------------------------------------------------");
+    bfree(str6);
+    print_mem();
+    printf("-----------------------------------------------------------------");
+    bfree(str5);
+    print_mem();
+    printf("-----------------------------------------------------------------");
+    bfree(str4);
+    print_mem();
+    printf("-----------------------------------------------------------------");
+    bfree(str3);
+    print_mem();
 }
