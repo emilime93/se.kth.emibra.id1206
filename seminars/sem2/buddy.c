@@ -190,7 +190,18 @@ struct head *find(int level) {
 }
 
 void merge(struct head *block) {
-
+    if (block->level == LEVELS-1) {
+        printf("max level reached\n");
+        return;
+    }
+    struct head *bud = buddy(block);
+    if (bud->status == Free) {
+        unlink_block(block);
+        unlink_block(bud);
+        struct head *prim = primary(block);
+        link_block(prim);
+        merge(prim);
+    }
 }
 
 void insert(struct head *block) {
@@ -214,15 +225,7 @@ void insert(struct head *block) {
             }
             flists[level] = block;
         } else {                    // Has a free buddy - merge time!
-            // remove both from their lists
-            // PRIMARY
-            unlink_block(block);
-            unlink_block(friend);
-
-            // grab the primary(merged) with primary(friend)
-            struct head *merged = primary(friend);
-            link_block(merged);
-            // link it into its list
+            merge(block);
         }
     }
 }
@@ -296,16 +299,50 @@ void test() {
     test_headers(prim);
 }
 
+void dyn_inter_alloc() {
+    int mem_size = 0;
+    do {
+        printf("Allocate how much mem? (quit=0) ");
+        scanf("%d", &mem_size);
+        balloc(mem_size);
+        print_mem();
+    } while(mem_size);
+}
+
 void test2() {
-    printf("==== Inserted a new blcok ====");
     insert(new());
     print_mem();
-    char *myMem = balloc(20*sizeof(int));
-    strcpy(myMem, "hejsan");
-    printf("meddelande: %s\n", myMem);
-    printf("=== HEADER TESTS ===\n");
-    test_headers(magic(myMem));
-    print_mem();
-    bfree(myMem);
-    print_mem();
+    dyn_inter_alloc();
+    // int memsize = 2;
+    // printf("Allocating %d B of memory (lvl %d", memsize, level(memsize));
+    // balloc(memsize);
+    // memsize = 16;
+    // printf("Allocating %d B of memory (lvl %d", memsize, level(memsize));
+    // balloc(memsize);
+    // memsize = 40;
+    // printf("Allocating %d B of memory (lvl %d", memsize, level(memsize));
+    // balloc(memsize);
+    // memsize = 100;
+    // printf("Allocating %d B of memory (lvl %d", memsize, level(memsize));
+    // balloc(memsize);
+    // memsize = 300;
+    // printf("Allocating %d B of memory (lvl %d", memsize, level(memsize));
+    // balloc(memsize);
+    // memsize = 800;
+    // printf("Allocating %d B of memory (lvl %d", memsize, level(memsize));
+    // balloc(memsize);
+    // memsize = 1000;
+    // print_mem();
+    
+    // printf("==== Inserted a new blcok ====");
+    // insert(new());
+    // print_mem();
+    // char *myMem = balloc(20*sizeof(int));
+    // strcpy(myMem, "hejsan");
+    // printf("meddelande: %s\n", myMem);
+    // printf("=== HEADER TESTS ===\n");
+    // test_headers(magic(myMem));
+    // print_mem();
+    // bfree(myMem);
+    // print_mem();
 }
