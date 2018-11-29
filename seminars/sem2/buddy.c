@@ -97,6 +97,7 @@ int level(int req) {
     }
     return lvl;
 }
+
 /* allocate a block */
 void *balloc(size_t size) {
     if (size == 0) {
@@ -119,33 +120,21 @@ void bfree(void *memory) {
 /* Strictly removes a block from its level in the list, and relinks the others */
 void unlink_block(struct head *block) {
     int level = block->level;
-    // printf("Unlinking level: %d, (%p)\n", level, block);
-    // test_headers(block);
     if(block->prev == NULL) { // It was the first in list
         if (block->next != NULL) { // It's first, with more in list
-            // printf("first\n");
             flists[level] = block->next;
             flists[level]->prev = NULL;
             block->next = NULL;
-            // printf("survived first\n");
         } else { // If it's solo
-            // printf("second (%p)\n", flists[level]);
             flists[level] = NULL;
-            block->next = NULL;
-            block->prev = NULL;
-            // printf("survived second\n");
         }
     } else { // Not first..
         if (block->next == NULL) { // I'm last
-            // printf("third\n");
             block->prev->next = NULL;
             block->prev = NULL;
-            // printf("survived third\n");
         } else { // Link me out from the middle of a sandwhich
-            // printf("fourth\n");
             block->next->prev = block->prev;
             block->prev->next = block->next;
-            // printf("survived fourth\n");
         }
     }
 }
@@ -171,7 +160,6 @@ void split_up(int level, int goal) {
     // Unlink the block from list
     struct head *block = flists[level];
     unlink_block(block);
-
 
     // Split it up
     struct head *supl = split(block);
@@ -231,7 +219,6 @@ void insert(struct head *block) {
             block->status = Free;
             link_block(block);
         } else {
-            // printf("Extra 4KB block. Reclaiming to the OS\n");
             reclaim_mem(block);
         }
     } else {

@@ -31,12 +31,12 @@ int main(int argc, char *argv[]) {
             // Pick a position in the buffer, and if it's taken, free it.
             int index = rand() % BUFFER;
             if (buffer[index] != NULL) {
-                bfree(buffer[index]);
+                free(buffer[index]);
             }
             // Get a random number and allocate it
             size_t size = (size_t) request();
             int *memory;
-            memory = balloc(size);
+            memory = malloc(size);
 
             if (memory == NULL) {
                 fprintf(stderr, "memory allication failed\n");
