@@ -5,7 +5,8 @@
 
 int main(int argc, char const *argv[])
 {
-    dyn_inter_alloc();
+    // dyn_inter_alloc();
+    test();
     // printf("malloc & free\n");
     // test_malloc(ROUNDS);
     // printf("--------------\n");

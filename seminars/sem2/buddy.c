@@ -13,6 +13,9 @@
 #define MIN 5
 #define LEVELS 8
 #define PAGE 4096
+#define MAX_PAGES 4
+
+short int NUM_ALLOC_PAGES = 0;
 
 struct head *find(int index);
 void insert(struct head*);
@@ -37,11 +40,12 @@ struct head *new() {
     
     if (new == MAP_FAILED) {
         printf("MMAP failed.\n");
-        return NULL;
+        exit(1);
     }
     assert(((long int)new & 0xfff) == 0); // last 12 bits should be zero
     new->status = Free;
     new->level = LEVELS - 1;
+    NUM_ALLOC_PAGES++;
     return new;
 }
 
@@ -52,6 +56,7 @@ void reclaim_mem(struct head *block) {
         printf("Couldn't reclaim memory to to OS\n");
         exit(1);
     }
+    NUM_ALLOC_PAGES--;
 }
 
 /* Returns the buddy block independently of if its the primary or suplementary one pair */
@@ -198,7 +203,11 @@ struct head *find(int level) {
 /* recursively merges blocks with their "buddies" to reclaim larger blocks */
 void merge(struct head *block) {
     if (block->level == (LEVELS - 1)) {
-        link_block(block);
+        if (NUM_ALLOC_PAGES <= MAX_PAGES) {
+            link_block(block);
+        } else {
+            reclaim_mem(block);
+        }
         return;
     }
     if (buddy(block)->status == Free && buddy(block)->level == block->level) {
@@ -214,8 +223,8 @@ void merge(struct head *block) {
 
 /* Sets a block status to free, and links it into the structure */
 void insert(struct head *block) {
-    if (block->level == LEVELS - 1) { // 4KB block
-        if (flists[block->level] == NULL) {
+    if (block->level == (LEVELS - 1)) { // 4KB block
+        if (flists[block->level] == NULL || NUM_ALLOC_PAGES <= MAX_PAGES) {
             block->status = Free;
             link_block(block);
         } else {
@@ -335,4 +344,30 @@ void test_malloc(int rounds) {
         gettimeofday(&malloc_stop, NULL);
         printf("%d\n", malloc_stop.tv_usec - malloc_start.tv_usec);
     }
+}
+
+void test() {
+    insert(new());
+    print_mem();
+    insert(new());
+    print_mem();
+    insert(new());
+    print_mem();
+    insert(new());
+    print_mem();
+    insert(new());
+    print_mem();
+    insert(new());
+    print_mem();
+
+    // More stuff
+    void *a = balloc(1000);
+    print_mem();
+    bfree(a);
+    print_mem();
+
+    void *b = balloc(10);
+    void *c = balloc(10);
+    void *d = balloc(10);
+    print_mem();
 }

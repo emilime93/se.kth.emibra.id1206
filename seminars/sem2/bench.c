@@ -14,6 +14,15 @@ int main(int argc, char *argv[]) {
     int rounds, loop;
     rounds = (argc > 1) ? atoi(argv[1]) : ROUNDS;
     loop = (argc > 2) ? atoi(argv[2]) : LOOP;
+    // char type = (argc > 3) ? argv[3] : "h";
+    // if (type == 'm') { // malloc
+
+    // } else if (type == 'b') { // balloc
+
+    // } else { // help
+    //     printf("usage: ./run <rounds> <loops> <b/m (balloc/malloc>");
+    //     exit(0);
+    // }
     // printf("Running with %d rounds and %d loops\n", rounds, loop);
     // Initialize the buffer
     void *buffer[BUFFER];
@@ -21,8 +30,7 @@ int main(int argc, char *argv[]) {
         buffer[i] = NULL;
     }
 
-    srand(time(0));
-
+    srand(time(0)); // Extra random
 
     struct timeval balloc_stop, balloc_start;
     for (int i = 0; i < rounds; i++) {

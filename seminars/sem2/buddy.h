@@ -4,3 +4,4 @@ void dyn_inter_alloc();
 
 void test_balloc();
 void test_malloc();
+void test();
