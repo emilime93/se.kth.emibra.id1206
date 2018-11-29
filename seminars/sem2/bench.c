@@ -14,7 +14,7 @@ int main(int argc, char *argv[]) {
     int rounds, loop;
     rounds = (argc > 1) ? atoi(argv[1]) : ROUNDS;
     loop = (argc > 2) ? atoi(argv[2]) : LOOP;
-    printf("Running with %d rounds and %d loops\n", rounds, loop);
+    // printf("Running with %d rounds and %d loops\n", rounds, loop);
     // Initialize the buffer
     void *buffer[BUFFER];
     for (int i = 0; i < BUFFER; i++) {
@@ -23,11 +23,11 @@ int main(int argc, char *argv[]) {
 
     srand(time(0));
 
-    struct timeval balloc_stop, balloc_start;
-    gettimeofday(&balloc_start, NULL);
 
-    for (int i = 0; i < ROUNDS; i++) {
-        for (int j = 0; j < LOOP; j++) {
+    struct timeval balloc_stop, balloc_start;
+    for (int i = 0; i < rounds; i++) {
+        gettimeofday(&balloc_start, NULL);
+        for (int j = 0; j < loop; j++) {
             // Pick a position in the buffer, and if it's taken, free it.
             int index = rand() % BUFFER;
             if (buffer[index] != NULL) {
@@ -45,9 +45,10 @@ int main(int argc, char *argv[]) {
             buffer[index] = memory;
             *memory = 123;
         }
+        gettimeofday(&balloc_stop, NULL);
+        printf("%f\n", (double)(balloc_stop.tv_usec - balloc_start.tv_usec) / 1000);
     }
-    gettimeofday(&balloc_stop, NULL);
-    printf("Time taken:%fms\n", (double)(balloc_stop.tv_usec - balloc_start.tv_usec) / 1000);
+    // Time in MS
 
     return 0;
 }
