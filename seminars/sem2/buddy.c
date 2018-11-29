@@ -220,7 +220,7 @@ void insert(struct head *block) {
             block->status = Free;
             link_block(block);
         } else {
-            printf("Extra 4KB block. Reclaiming to the OS\n");
+            // printf("Extra 4KB block. Reclaiming to the OS\n");
             reclaim_mem(block);
         }
     } else {
@@ -310,6 +310,7 @@ void workload(void * (*allocator)(size_t), void (*freeing)(void *)) {
 }
 
 void test_balloc(int rounds) {
+    // I don't know if this is cheating or not, preparing memory inside.
     insert(new()); // KEEP HERE
 
     
