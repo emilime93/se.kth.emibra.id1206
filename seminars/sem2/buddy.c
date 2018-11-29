@@ -118,19 +118,34 @@ void bfree(void *memory) {
 
 /* Strictly removes a block from its level in the list, and relinks the others */
 void unlink_block(struct head *block) {
+    int level = block->level;
+    // printf("Unlinking level: %d, (%p)\n", level, block);
+    // test_headers(block);
     if(block->prev == NULL) { // It was the first in list
-        if (block->next != NULL) { // Is there is something more in line
-            flists[block->level] = block->next;
-            flists[block->level]->prev = NULL;
-        } else {
-            flists[block->level] = NULL;
+        if (block->next != NULL) { // It's first, with more in list
+            // printf("first\n");
+            flists[level] = block->next;
+            flists[level]->prev = NULL;
+            block->next = NULL;
+            // printf("survived first\n");
+        } else { // If it's solo
+            // printf("second (%p)\n", flists[level]);
+            flists[level] = NULL;
+            block->next = NULL;
+            block->prev = NULL;
+            // printf("survived second\n");
         }
     } else { // Not first..
         if (block->next == NULL) { // I'm last
+            // printf("third\n");
             block->prev->next = NULL;
+            block->prev = NULL;
+            // printf("survived third\n");
         } else { // Link me out from the middle of a sandwhich
+            // printf("fourth\n");
             block->next->prev = block->prev;
             block->prev->next = block->next;
+            // printf("survived fourth\n");
         }
     }
 }
@@ -176,19 +191,15 @@ void split_up(int level, int goal) {
 /* fetches a block of the level specified in the parameter */
 struct head *find(int level) {
     if (flists[level] == NULL) {
-        if (level == LEVELS - 1) { // Allocating new memory
-            insert(new());
-        } else {
-            int lvl_w_mem = level + 1;
-            while(flists[lvl_w_mem] == NULL && lvl_w_mem < LEVELS) {
-                lvl_w_mem++;
-            }
-            if (lvl_w_mem >= LEVELS) {
-                insert(new());
-                lvl_w_mem = LEVELS-1;
-            }
-            split_up(lvl_w_mem, level);
+        int lvl_w_mem = level + 1;
+        while(flists[lvl_w_mem] == NULL && lvl_w_mem < LEVELS) {
+            lvl_w_mem++;
         }
+        if (lvl_w_mem >= LEVELS) { // The requested amount of memory was max
+            insert(new());
+            lvl_w_mem = LEVELS-1;
+        }
+        split_up(lvl_w_mem, level);
     }
     struct head *alloc = flists[level];
     unlink_block(alloc);
@@ -198,11 +209,11 @@ struct head *find(int level) {
 
 /* recursively merges blocks with their "buddies" to reclaim larger blocks */
 void merge(struct head *block) {
-    if (block->level == LEVELS - 1) {
+    if (block->level == (LEVELS - 1)) {
         link_block(block);
         return;
     }
-    if (buddy(block)->status == Free) {
+    if (buddy(block)->status == Free && buddy(block)->level == block->level) {
         unlink_block(buddy(block));
         struct head *prim = primary(block);
         prim->level++;
@@ -236,7 +247,8 @@ void insert(struct head *block) {
 void test_headers(struct head *mem) {
     if (mem == NULL) {
         printf("ERROR: NULL HEADER\n");
-        return;
+        exit(1);
+        // return;
     }
     char status[20];
     if (mem->status == Free) {

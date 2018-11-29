@@ -5,10 +5,11 @@
 
 int main(int argc, char const *argv[])
 {
-    printf("malloc & free\n");
-    test_malloc(ROUNDS);
-    printf("--------------\n");
-    printf("balloc & bfree\n");
-    test_balloc(ROUNDS);
+    dyn_inter_alloc();
+    // printf("malloc & free\n");
+    // test_malloc(ROUNDS);
+    // printf("--------------\n");
+    // printf("balloc & bfree\n");
+    // test_balloc(ROUNDS);
     return 0;
 }

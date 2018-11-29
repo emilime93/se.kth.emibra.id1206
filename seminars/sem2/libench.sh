@@ -1,4 +1,5 @@
-gcc -c buddy.c &&
-gcc -c rand.c &&
-gcc -o bench rand.o buddy.o bench.c -lm &&
-./bench
+#Make script the extended test in linux
+gcc -c -g buddy.c &&
+gcc -c -g rand.c &&
+gcc -o bench.out rand.o buddy.o bench.c -g -lm &&
+./bench.out

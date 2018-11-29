@@ -8,14 +8,20 @@
 #define ROUNDS 10
 #define LOOP 1000
 
-#define BUFFER 1000
+#define BUFFER 100
 
 int main(int argc, char *argv[]) {
+    int rounds, loop;
+    rounds = (argc > 1) ? atoi(argv[1]) : ROUNDS;
+    loop = (argc > 2) ? atoi(argv[2]) : LOOP;
+    printf("Running with %d rounds and %d loops\n", rounds, loop);
     // Initialize the buffer
     void *buffer[BUFFER];
     for (int i = 0; i < BUFFER; i++) {
         buffer[i] = NULL;
     }
+
+    srand(time(0));
 
     struct timeval balloc_stop, balloc_start;
     gettimeofday(&balloc_start, NULL);
@@ -34,7 +40,7 @@ int main(int argc, char *argv[]) {
 
             if (memory == NULL) {
                 fprintf(stderr, "memory allication failed\n");
-                return 1;
+                exit(1);
             }
             buffer[index] = memory;
             *memory = 123;
