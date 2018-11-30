@@ -13,9 +13,11 @@
 #define MIN 5
 #define LEVELS 8
 #define PAGE 4096
-#define MAX_PAGES 4
+// Anything under 20 MAX_PAGES gives a 1 time unit runtime
+// And when bumping MAX_PAGES to above 25 gives a 0.4 factor runtime.
+#define MAX_PAGES 30
 
-short int NUM_ALLOC_PAGES = 0;
+int NUM_ALLOC_PAGES = 0;
 
 struct head *find(int index);
 void insert(struct head*);
@@ -274,6 +276,22 @@ void print_lvl(int lvl) {
             curr = curr->next;
         }
     }
+}
+
+double get_mem_ratio() {
+    int header_size = sizeof(struct head*);
+    int utilized_mem = 0;
+    for (int i = 0; i < LEVELS; i++) {
+        struct head *curr;
+        if (flists[i] != NULL) {
+            curr = flists[i];
+            while (curr != NULL) {
+                utilized_mem += (int)pow(2, curr->level+MIN);
+                curr = curr->next;
+            }
+        }
+    }
+    return (double)((PAGE*NUM_ALLOC_PAGES)-utilized_mem)/(PAGE*NUM_ALLOC_PAGES);
 }
 
 void print_mem() {
