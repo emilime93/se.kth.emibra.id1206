@@ -4,32 +4,47 @@
 #include <pthread.h>
 #include <time.h>
 
-
 // The list will contain elements from 0 to 99
 #define MAX 1000000
 
 typedef struct cell {
     int val;
     struct cell *next;
+    int mutex;
 } cell;
 
-cell sentinel = {MAX, NULL};
-cell dummy = {-1, &sentinel};
+cell sentinel = {MAX, NULL, 0};
+cell dummy = {-1, &sentinel, 0};
 
 cell *global = &dummy;
 
-pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+int try(volatile int *mutex) {
+    return __sync_val_compare_and_swap(mutex, 0, 1);
+}
+
+void lock(volatile int *mutex) {
+    while (try(mutex) != 0) {
+        sched_yield();
+    };
+}
+
+void unlock(volatile int *mutex) {
+    *mutex = 0;
+}
 
 void toggle(cell *list, int r) {
-    cell *prev = NULL;
-    cell *this = list;
+    cell *prev = list;
+    lock(&prev->mutex);
+    cell *this = prev->next;
+    lock(&this->mutex);
+
     cell *removed = NULL;
 
-    pthread_mutex_lock(&mutex);
-
     while (this->val < r) {
+        unlock(&prev->mutex);
         prev = this;
         this = this->next;
+        lock(&this->mutex);
     }
     if (this->val == r) {
         prev->next = this->next;
@@ -38,9 +53,14 @@ void toggle(cell *list, int r) {
         cell *new = malloc(sizeof(cell));
         new->val = r;
         new->next = this;
+        new->mutex = 0;
+        // pthread_mutex_init(&new->mutex, NULL);
         prev->next = new;
+        new = NULL;
     }
-    pthread_mutex_unlock(&mutex);
+    unlock(&prev->mutex);
+    unlock(&this->mutex);
+
     if (removed != NULL)
         free(removed);
     return;
@@ -87,9 +107,8 @@ int main(int argc, char const *argv[]) {
 
     printf("%d threads doing %d operations each\n", n, inc);
 
-    pthread_mutex_init(&mutex, NULL);
-
     args *thra = malloc(n * sizeof(args));
+
     for (int i = 0; i < n; i++) {
         thra[i].inc = inc;
         thra[i].id = i;

@@ -9,7 +9,7 @@ typedef struct args {
 } args;
 
 volatile int count = 0;
-volatile int global = 0;
+// volatile int global = 0;
 
 int try(volatile int *mutex) {
     return __sync_val_compare_and_swap(mutex, 0, 1);
@@ -42,34 +42,34 @@ void *increment(void *arg) {
     return (void *)spun_count;
 }
 
-int main(int argc, char const *argv[]) {
-    if (argc != 2) {
-        printf("usage peterson <inc>\n");
-        exit(0);
-    }
+// int main(int argc, char const *argv[]) {
+//     if (argc != 2) {
+//         printf("usage peterson <inc>\n");
+//         exit(0);
+//     }
 
-    int inc = atoi(argv[1]);
+//     int inc = atoi(argv[1]);
 
-    pthread_t one_p, two_p;
-    args one_args, two_args;
+//     pthread_t one_p, two_p;
+//     args one_args, two_args;
 
-    one_args.mutex = &global;
-    two_args.mutex = &global;
-    one_args.inc = inc;
-    two_args.inc = inc;
-    one_args.id = 0;
-    two_args.id = 1;
+//     one_args.mutex = &global;
+//     two_args.mutex = &global;
+//     one_args.inc = inc;
+//     two_args.inc = inc;
+//     one_args.id = 0;
+//     two_args.id = 1;
 
-    pthread_create(&one_p, NULL, increment, &one_args);
-    pthread_create(&two_p, NULL, increment, &two_args);
+//     pthread_create(&one_p, NULL, increment, &one_args);
+//     pthread_create(&two_p, NULL, increment, &two_args);
 
-    int retval1, retval2;
-    pthread_join(one_p, (void*) &retval1);
-    pthread_join(two_p, (void*) &retval2);
+//     int retval1, retval2;
+//     pthread_join(one_p, (void*) &retval1);
+//     pthread_join(two_p, (void*) &retval2);
 
-    printf("first returned: %d\n", retval1);
-    printf("second returned: %d\n", retval2);
-    printf("result is %d\n", count);
+//     printf("first returned: %d\n", retval1);
+//     printf("second returned: %d\n", retval2);
+//     printf("result is %d\n", count);
 
-    return 0;
-}
+//     return 0;
+// }

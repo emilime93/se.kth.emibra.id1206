@@ -4,32 +4,33 @@
 #include <pthread.h>
 #include <time.h>
 
-
 // The list will contain elements from 0 to 99
 #define MAX 1000000
 
 typedef struct cell {
     int val;
     struct cell *next;
+    pthread_mutex_t mutex;
 } cell;
 
-cell sentinel = {MAX, NULL};
-cell dummy = {-1, &sentinel};
+cell sentinel = {MAX, NULL, PTHREAD_MUTEX_INITIALIZER};
+cell dummy = {-1, &sentinel, PTHREAD_MUTEX_INITIALIZER};
 
 cell *global = &dummy;
 
-pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
-
 void toggle(cell *list, int r) {
-    cell *prev = NULL;
-    cell *this = list;
+    cell *prev = list;
+    pthread_mutex_lock(&prev->mutex);
+    cell *this = prev->next;
+    pthread_mutex_lock(&this->mutex);
+
     cell *removed = NULL;
 
-    pthread_mutex_lock(&mutex);
-
     while (this->val < r) {
+        pthread_mutex_unlock(&prev->mutex);
         prev = this;
         this = this->next;
+        pthread_mutex_lock(&this->mutex);
     }
     if (this->val == r) {
         prev->next = this->next;
@@ -38,9 +39,13 @@ void toggle(cell *list, int r) {
         cell *new = malloc(sizeof(cell));
         new->val = r;
         new->next = this;
+        pthread_mutex_init(&new->mutex, NULL);
         prev->next = new;
+        new = NULL;
     }
-    pthread_mutex_unlock(&mutex);
+    pthread_mutex_unlock(&prev->mutex);
+    pthread_mutex_unlock(&this->mutex);
+
     if (removed != NULL)
         free(removed);
     return;
@@ -87,9 +92,8 @@ int main(int argc, char const *argv[]) {
 
     printf("%d threads doing %d operations each\n", n, inc);
 
-    pthread_mutex_init(&mutex, NULL);
-
     args *thra = malloc(n * sizeof(args));
+
     for (int i = 0; i < n; i++) {
         thra[i].inc = inc;
         thra[i].id = i;
