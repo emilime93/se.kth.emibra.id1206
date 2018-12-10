@@ -8,3 +8,7 @@ typedef struct green_t {
     struct green_t *join;
     int zombie;
 } green_t;
+
+int green_create(green_t *thread, void *(*fun)(void*), void *arg);
+int green_yield();
+int green_join(green_t *thread);
