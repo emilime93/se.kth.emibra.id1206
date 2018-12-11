@@ -2,15 +2,26 @@
 #include <stdio.h>
 #include <ucontext.h>
 #include <assert.h>
+#include <signal.h>
+#include <sys/time.h>
 #include "green.h"
 
 #define FALSE 0
 #define TRUE 1
 
+#define PERIOD 100
 #define STACK_SIZE 4096
 
-void green_thread();
+void green_thread(void);
+void timer_handler(int);
+green_t *dequeue_ready(void);
+void queue_ready(green_t*);
+int green_mutex_lock(green_mutex_t*);
+int green_mutex_unlock(green_mutex_t*);
+int green_mutex_init(green_mutex_t*);
 
+static sigset_t block;
+static green_mutex_t timer_lock;
 static ucontext_t main_cntx = {0};
 static green_t main_green = {&main_cntx, NULL, NULL, NULL, NULL, FALSE};
 
@@ -22,21 +33,58 @@ static void init() __attribute__((constructor));
 
 void init() {
     getcontext(&main_cntx);
+    green_mutex_init(&timer_lock);
+
+    // Timer stuff
+    sigemptyset(&block);
+    sigaddset(&block, SIGVTALRM);
+
+    struct sigaction act = {0};
+    struct timeval interval;
+    struct itimerval period;
+
+    act.sa_handler = timer_handler;
+    assert(sigaction(SIGVTALRM, &act, NULL) == 0);
+
+    interval.tv_sec = 0;
+    interval.tv_usec = PERIOD;
+    period.it_interval = interval;
+    period.it_value = interval;
+    setitimer(ITIMER_VIRTUAL, &period, NULL);
 }
 
-/* Returns the next in the ready queue. Returns NULL if there the queue is empty */
+void timer_handler(int sig) {
+    // green_mutex_lock(&timer_lock);
+    sigprocmask(SIG_BLOCK, &block, NULL);
+    green_t *susp = running;
+
+    // put in ready queue 
+    queue_ready(susp);
+
+    // find next to execute
+    green_t *next = dequeue_ready();
+    running = next;
+    sigprocmask(SIG_UNBLOCK, &block, NULL);
+    swapcontext(susp->context, next->context);
+    // green_mutex_unlock(&timer_lock);
+}
+
+/* Returns the next in the ready queue. Returns the main_green thread if there the queue is empty */
 green_t *dequeue_ready() {
-    green_t *next = NULL;
+    green_t *next = &main_green;
     if (ready_queue != NULL) {
         next = ready_queue;
         ready_queue = ready_queue->next;
         next->next = NULL;
+    } else { // DEBUG
+        printf("returning the main thread\n");
+        // TODO: Remove me, I'm DEBUG
     }
     return next;
 }
 
 /* adds a thread to the ready queue. */
-void queue(green_t *new) {
+void queue_ready(green_t *new) {
     // add new to the ready queue
     green_t *curr = ready_queue;
     if (ready_queue != NULL) {
@@ -67,7 +115,7 @@ int green_create(green_t *new, void *(*fun)(void*), void *arg) {
     new->zombie = FALSE;
 
     // add new to the ready queue
-    queue(new);
+    queue_ready(new);
 
     return 0;
 }
@@ -79,7 +127,7 @@ void green_thread() {
 
     // Place waiting (joining) thread in ready queue
     if (this->join != NULL) {
-        queue(this->join);
+        queue_ready(this->join);
     }
 
     // Free allocated memory structures
@@ -91,9 +139,6 @@ void green_thread() {
 
     // find the next thread to run
     green_t *next = dequeue_ready();
-    if (next == NULL) {
-        next = &main_green;
-    }
     running = next;
     setcontext(next->context);
 }
@@ -101,12 +146,9 @@ void green_thread() {
 /* yields a thread from execution */
 int green_yield() {
     green_t *susp = running;
-    queue(susp);
+    queue_ready(susp);
     
     green_t *next = dequeue_ready();
-    if (next == NULL) {
-        next = &main_green;
-    }
     running = next;
     swapcontext(susp->context, next->context);
     // IMPORTANT POINT IN CODE, EXECUTION WILL RESUME HERE FOR SUSP!!!!
@@ -125,8 +167,6 @@ int green_join(green_t *thread) {
 
     // select the next thread for execution
     green_t *next = dequeue_ready();
-    if (next == NULL)
-        next = &main_green;
     running = next;
     swapcontext(susp->context, next->context);
 
@@ -162,9 +202,6 @@ void green_cond_wait(green_cond_t *cond) {
 
     // Find next to run and run it.
     green_t *next = dequeue_ready();
-    if (next == NULL) {
-        next = &main_green;
-    }
     // printf("Sleeping #%d\n", *((int *)susp->arg));
     running = next;
     cond->num_susp++;
@@ -182,6 +219,63 @@ void green_cond_signal(green_cond_t *cond) {
     cond->waiting = old->next;
 
     old->next = NULL;
-    queue(old);
+    queue_ready(old);
     cond->num_susp--;
+}
+
+/************************************************
+ *                  LOCKS                       *
+ * **********************************************/
+
+int green_mutex_init(green_mutex_t *mutex) {
+    mutex->taken = FALSE;
+    mutex->susp = NULL;
+}
+
+int green_mutex_lock(green_mutex_t *mutex) {
+    // Block timer interrupt
+    sigprocmask(SIG_BLOCK, &block, NULL);
+
+    green_t *susp = running;
+    while(mutex->taken) {
+        // Suspend the running thread
+        green_t *curr = mutex->susp;
+        while (curr != NULL) {
+            curr = curr->next;
+        }
+        curr = susp;
+
+        // find the next thread
+        green_t *next = dequeue_ready();
+        running = next;
+        swapcontext(susp->context, next->context);
+    }
+    // Take the lock
+    mutex->taken = TRUE;
+    
+    // Unblock
+    sigprocmask(SIG_UNBLOCK, &block, NULL);
+
+    return 0;
+}
+
+int green_mutex_unlock(green_mutex_t *mutex) {
+    // Block timer interrupt
+    sigprocmask(SIG_BLOCK, &block, NULL);
+
+    // Move suspended threads to ready queue
+    green_t *susp_threads = mutex->susp;
+    while (susp_threads != NULL) {
+        printf("adding to ready queue\n");
+        queue_ready(susp_threads);
+        susp_threads = susp_threads->next;
+        susp_threads->next = NULL;
+    }
+    // release lock
+    mutex->taken = FALSE;
+
+    // Unblock
+    sigprocmask(SIG_UNBLOCK, &block, NULL);
+
+    return 0;
 }
