@@ -22,7 +22,6 @@ static void init() __attribute__((constructor));
 
 void init() {
     getcontext(&main_cntx);
-    printf("main context: %p\n", &main_cntx);
 }
 
 /* Returns the next in the ready queue. Returns NULL if there the queue is empty */
@@ -31,8 +30,8 @@ green_t *dequeue_ready() {
     if (ready_queue != NULL) {
         next = ready_queue;
         ready_queue = ready_queue->next;
+        next->next = NULL;
     }
-    next->next = NULL;
     return next;
 }
 
@@ -42,7 +41,6 @@ void queue(green_t *new) {
     green_t *curr = ready_queue;
     if (ready_queue != NULL) {
         while(curr->next != NULL) {
-            // printf("Snurrr.\n");
             curr = curr->next;
         }
         curr->next = new;
@@ -51,6 +49,7 @@ void queue(green_t *new) {
     }
 }
 
+/* creates a thread with a function and parameters */
 int green_create(green_t *new, void *(*fun)(void*), void *arg) {
     ucontext_t *cntx = (ucontext_t *) malloc(sizeof(ucontext_t));
     getcontext(cntx);
@@ -88,7 +87,7 @@ void green_thread() {
     free(this->context);
 
     // we're a zombie
-    this->zombie = TRUE; // WHAT TO DO
+    this->zombie = TRUE;
 
     // find the next thread to run
     green_t *next = dequeue_ready();
@@ -99,6 +98,7 @@ void green_thread() {
     setcontext(next->context);
 }
 
+/* yields a thread from execution */
 int green_yield() {
     green_t *susp = running;
     queue(susp);
@@ -114,6 +114,7 @@ int green_yield() {
     return 0;
 }
 
+/* waits a the specified thread to terminate before executing */
 int green_join(green_t *thread) {
     if (thread->zombie)
         return 0;
@@ -130,4 +131,57 @@ int green_join(green_t *thread) {
     swapcontext(susp->context, next->context);
 
     return 0;
+}
+
+/************************************************
+ *                CONDITIONALS                  *
+ * **********************************************/
+
+void green_cond_init(green_cond_t *cond) {
+    cond->num_susp = 0;
+    cond->waiting = NULL;
+}
+
+/* Suspends the process on the condition variable */
+void green_cond_wait(green_cond_t *cond) {
+    // Another one is waiting
+    
+    // The currently running one will be suspended
+    green_t *susp = running;
+    
+    // If no one's waiting
+    if (cond->num_susp == 0) {
+        cond->waiting = susp;
+    } else {
+        green_t *curr = cond->waiting;
+        while (curr != NULL) {
+            curr = curr->next;
+        } // Add the suspended one to the list
+        curr = susp;
+    }
+
+    // Find next to run and run it.
+    green_t *next = dequeue_ready();
+    if (next == NULL) {
+        next = &main_green;
+    }
+    // printf("Sleeping #%d\n", *((int *)susp->arg));
+    running = next;
+    cond->num_susp++;
+    swapcontext(susp->context, next->context);
+}
+
+/* Signals the next waiting on the variable */
+void green_cond_signal(green_cond_t *cond) {
+    if (cond->num_susp == 0) {
+        assert(cond->waiting == NULL);
+        return;
+    }
+    assert(cond->waiting != NULL && cond->num_susp > 0);
+    green_t *old = cond->waiting;
+    cond->waiting = old->next;
+
+    old->next = NULL;
+    queue(old);
+    cond->num_susp--;
 }
