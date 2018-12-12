@@ -9,7 +9,7 @@
 #define FALSE 0
 #define TRUE 1
 
-#define PERIOD 100
+#define PERIOD 1
 #define STACK_SIZE 4096
 
 void green_thread(void);
@@ -27,7 +27,8 @@ static green_t main_green = {&main_cntx, NULL, NULL, NULL, NULL, FALSE};
 
 static green_t *running = &main_green;
 
-static green_t *ready_queue;
+static green_t *ready_first = NULL;
+static green_t *ready_last = NULL;
 
 static void init() __attribute__((constructor));
 
@@ -53,11 +54,13 @@ void init() {
     setitimer(ITIMER_VIRTUAL, &period, NULL);
 }
 
+/* Handles the interrupt each period */
 void timer_handler(int sig) {
-    // green_mutex_lock(&timer_lock);
     sigprocmask(SIG_BLOCK, &block, NULL);
     green_t *susp = running;
 
+    // RING RING
+    printf("!");
     // put in ready queue 
     queue_ready(susp);
 
@@ -66,19 +69,21 @@ void timer_handler(int sig) {
     running = next;
     sigprocmask(SIG_UNBLOCK, &block, NULL);
     swapcontext(susp->context, next->context);
-    // green_mutex_unlock(&timer_lock);
 }
 
 /* Returns the next in the ready queue. Returns the main_green thread if there the queue is empty */
 green_t *dequeue_ready() {
     green_t *next = &main_green;
-    if (ready_queue != NULL) {
-        next = ready_queue;
-        ready_queue = ready_queue->next;
+    if (ready_first != NULL) {
+        next = ready_first;
+        // If they both point at the same node, last should be set to NULL as well
+        if (ready_first == ready_last) {
+            ready_last = NULL;
+        }
+        ready_first = ready_first->next;
         next->next = NULL;
-    } else { // DEBUG
+    } else { // DEBUG TODO: Remove me
         printf("returning the main thread\n");
-        // TODO: Remove me, I'm DEBUG
     }
     return next;
 }
@@ -86,14 +91,13 @@ green_t *dequeue_ready() {
 /* adds a thread to the ready queue. */
 void queue_ready(green_t *new) {
     // add new to the ready queue
-    green_t *curr = ready_queue;
-    if (ready_queue != NULL) {
-        while(curr->next != NULL) {
-            curr = curr->next;
-        }
-        curr->next = new;
+    // new->next = NULL;
+    if (ready_last != NULL) {
+        ready_last->next = new;
+        ready_last = new;
     } else {
-        ready_queue = new;
+        ready_first = new;
+        ready_last = new;
     }
 }
 
@@ -127,7 +131,10 @@ void green_thread() {
 
     // Place waiting (joining) thread in ready queue
     if (this->join != NULL) {
-        queue_ready(this->join);
+        // TODO: Changed here....
+        green_t *joiner = this->join;
+        this->join = this->join->next;
+        queue_ready(joiner);
     }
 
     // Free allocated memory structures
@@ -227,23 +234,33 @@ void green_cond_signal(green_cond_t *cond) {
  *                  LOCKS                       *
  * **********************************************/
 
+/* Initializes the mutex */
 int green_mutex_init(green_mutex_t *mutex) {
     mutex->taken = FALSE;
     mutex->susp = NULL;
 }
 
+/* Grabs the lock */
 int green_mutex_lock(green_mutex_t *mutex) {
     // Block timer interrupt
     sigprocmask(SIG_BLOCK, &block, NULL);
 
     green_t *susp = running;
-    while(mutex->taken) {
+    while(mutex->taken == TRUE) {
+        printf("????????????\n");
         // Suspend the running thread
         green_t *curr = mutex->susp;
         while (curr != NULL) {
             curr = curr->next;
         }
         curr = susp;
+
+        // printf("=== Mutex wait list ===\n");
+        // green_t *debug = mutex->susp;
+        // while (debug != NULL) {
+        //     printf("I'm: %p -> %p\n", debug, debug->next);
+        // }
+        // printf("=== Mutex wait END ===\n");
 
         // find the next thread
         green_t *next = dequeue_ready();
@@ -259,18 +276,15 @@ int green_mutex_lock(green_mutex_t *mutex) {
     return 0;
 }
 
+/* Releases the lcok */
 int green_mutex_unlock(green_mutex_t *mutex) {
     // Block timer interrupt
     sigprocmask(SIG_BLOCK, &block, NULL);
 
     // Move suspended threads to ready queue
-    green_t *susp_threads = mutex->susp;
-    while (susp_threads != NULL) {
-        printf("adding to ready queue\n");
-        queue_ready(susp_threads);
-        susp_threads = susp_threads->next;
-        susp_threads->next = NULL;
-    }
+    queue_ready(mutex->susp);
+    mutex->susp = NULL;
+
     // release lock
     mutex->taken = FALSE;
 
