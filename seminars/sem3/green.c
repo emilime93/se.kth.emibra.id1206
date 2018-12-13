@@ -9,13 +9,13 @@
 #define FALSE 0
 #define TRUE 1
 
-#define PERIOD 1
+#define PERIOD 100
 #define STACK_SIZE 4096
 
 void green_thread(void);
 void timer_handler(int);
-green_t *dequeue_ready(void);
-void queue_ready(green_t*);
+green_t *dequeue(green_t**);
+void enqueue(green_t**, green_t*);
 int green_mutex_lock(green_mutex_t*);
 int green_mutex_unlock(green_mutex_t*);
 int green_mutex_init(green_mutex_t*);
@@ -27,8 +27,7 @@ static green_t main_green = {&main_cntx, NULL, NULL, NULL, NULL, FALSE};
 
 static green_t *running = &main_green;
 
-static green_t *ready_first = NULL;
-static green_t *ready_last = NULL;
+static green_t *ready_queue = NULL;
 
 static void init() __attribute__((constructor));
 
@@ -54,50 +53,47 @@ void init() {
     setitimer(ITIMER_VIRTUAL, &period, NULL);
 }
 
+volatile int num_interrupts = 0;
 /* Handles the interrupt each period */
 void timer_handler(int sig) {
     sigprocmask(SIG_BLOCK, &block, NULL);
     green_t *susp = running;
 
-    // RING RING
-    printf("!");
+    num_interrupts++;
+
     // put in ready queue 
-    queue_ready(susp);
+    enqueue(&ready_queue, susp);
 
     // find next to execute
-    green_t *next = dequeue_ready();
+    green_t *next = dequeue(&ready_queue);
     running = next;
     sigprocmask(SIG_UNBLOCK, &block, NULL);
     swapcontext(susp->context, next->context);
 }
 
 /* Returns the next in the ready queue. Returns the main_green thread if there the queue is empty */
-green_t *dequeue_ready() {
-    green_t *next = &main_green;
-    if (ready_first != NULL) {
-        next = ready_first;
-        // If they both point at the same node, last should be set to NULL as well
-        if (ready_first == ready_last) {
-            ready_last = NULL;
-        }
-        ready_first = ready_first->next;
-        next->next = NULL;
-    } else { // DEBUG TODO: Remove me
-        printf("returning the main thread\n");
+green_t *dequeue(green_t **list) {
+    if (*list == NULL) {
+        printf("This should probably not happen (line 85)\n");
+        return NULL;
+    } else {
+        green_t *thread = *list;
+        *list = (*list)->next;
+        thread->next = NULL;
+        return thread;
     }
-    return next;
 }
 
 /* adds a thread to the ready queue. */
-void queue_ready(green_t *new) {
-    // add new to the ready queue
-    // new->next = NULL;
-    if (ready_last != NULL) {
-        ready_last->next = new;
-        ready_last = new;
+void enqueue(green_t **list, green_t *thread) {
+    if (*list == NULL) {
+        *list = thread;
     } else {
-        ready_first = new;
-        ready_last = new;
+        green_t *curr = *list;
+        while (curr->next != NULL) {
+            curr = curr->next;
+        }
+        curr->next = thread;
     }
 }
 
@@ -119,7 +115,7 @@ int green_create(green_t *new, void *(*fun)(void*), void *arg) {
     new->zombie = FALSE;
 
     // add new to the ready queue
-    queue_ready(new);
+    enqueue(&ready_queue, new);
 
     return 0;
 }
@@ -131,10 +127,7 @@ void green_thread() {
 
     // Place waiting (joining) thread in ready queue
     if (this->join != NULL) {
-        // TODO: Changed here....
-        green_t *joiner = this->join;
-        this->join = this->join->next;
-        queue_ready(joiner);
+        enqueue(&ready_queue, this->join);
     }
 
     // Free allocated memory structures
@@ -145,7 +138,7 @@ void green_thread() {
     this->zombie = TRUE;
 
     // find the next thread to run
-    green_t *next = dequeue_ready();
+    green_t *next = dequeue(&ready_queue);
     running = next;
     setcontext(next->context);
 }
@@ -153,9 +146,9 @@ void green_thread() {
 /* yields a thread from execution */
 int green_yield() {
     green_t *susp = running;
-    queue_ready(susp);
+    enqueue(&ready_queue, susp);
     
-    green_t *next = dequeue_ready();
+    green_t *next = dequeue(&ready_queue);
     running = next;
     swapcontext(susp->context, next->context);
     // IMPORTANT POINT IN CODE, EXECUTION WILL RESUME HERE FOR SUSP!!!!
@@ -173,7 +166,7 @@ int green_join(green_t *thread) {
     thread->join = susp;
 
     // select the next thread for execution
-    green_t *next = dequeue_ready();
+    green_t *next = dequeue(&ready_queue);
     running = next;
     swapcontext(susp->context, next->context);
 
@@ -196,20 +189,11 @@ void green_cond_wait(green_cond_t *cond) {
     // The currently running one will be suspended
     green_t *susp = running;
     
-    // If no one's waiting
-    if (cond->num_susp == 0) {
-        cond->waiting = susp;
-    } else {
-        green_t *curr = cond->waiting;
-        while (curr != NULL) {
-            curr = curr->next;
-        } // Add the suspended one to the list
-        curr = susp;
-    }
+    // Add the waiter
+    enqueue(&cond->waiting, susp);
 
     // Find next to run and run it.
-    green_t *next = dequeue_ready();
-    // printf("Sleeping #%d\n", *((int *)susp->arg));
+    green_t *next = dequeue(&ready_queue);
     running = next;
     cond->num_susp++;
     swapcontext(susp->context, next->context);
@@ -225,45 +209,47 @@ void green_cond_signal(green_cond_t *cond) {
     green_t *old = cond->waiting;
     cond->waiting = old->next;
 
-    old->next = NULL;
-    queue_ready(old);
+    enqueue(&ready_queue, old);
     cond->num_susp--;
 }
 
 /************************************************
  *                  LOCKS                       *
- * **********************************************/
+ ************************************************/
+
+void push_to_list(green_t *list, green_t *thread) {
+    // If no, one's suspending on the list
+    if (list->next == NULL) {
+        list->next = thread;
+        thread->next = NULL;
+    } else {
+        push_to_list(list->next, thread);
+    }
+}
 
 /* Initializes the mutex */
 int green_mutex_init(green_mutex_t *mutex) {
     mutex->taken = FALSE;
     mutex->susp = NULL;
+    return 0;
 }
 
+volatile int lock3 = 0;
+volatile int lock4 = 0;
+volatile int lock44 = 0;
 /* Grabs the lock */
 int green_mutex_lock(green_mutex_t *mutex) {
     // Block timer interrupt
     sigprocmask(SIG_BLOCK, &block, NULL);
 
     green_t *susp = running;
-    while(mutex->taken == TRUE) {
-        printf("????????????\n");
+
+    while(mutex->taken) {
         // Suspend the running thread
-        green_t *curr = mutex->susp;
-        while (curr != NULL) {
-            curr = curr->next;
-        }
-        curr = susp;
+        enqueue(&mutex->susp, susp);
 
-        // printf("=== Mutex wait list ===\n");
-        // green_t *debug = mutex->susp;
-        // while (debug != NULL) {
-        //     printf("I'm: %p -> %p\n", debug, debug->next);
-        // }
-        // printf("=== Mutex wait END ===\n");
-
-        // find the next thread
-        green_t *next = dequeue_ready();
+        // Find the next thread
+        green_t *next = dequeue(&ready_queue);
         running = next;
         swapcontext(susp->context, next->context);
     }
@@ -276,14 +262,25 @@ int green_mutex_lock(green_mutex_t *mutex) {
     return 0;
 }
 
+volatile int unlock3 = 0;
+volatile int unlock4 = 0;
+volatile int unlock44 = 0;
 /* Releases the lcok */
 int green_mutex_unlock(green_mutex_t *mutex) {
     // Block timer interrupt
     sigprocmask(SIG_BLOCK, &block, NULL);
+    if(*((int*)running->arg) == 3)
+        unlock3++;
+    else if (*((int*)running->arg) == 4)
+        unlock4++;
+    else
+        unlock44++;
 
     // Move suspended threads to ready queue
-    queue_ready(mutex->susp);
-    mutex->susp = NULL;
+    if (mutex->susp != NULL) {
+        enqueue(&ready_queue, mutex->susp);
+        mutex->susp = NULL;
+    }
 
     // release lock
     mutex->taken = FALSE;
