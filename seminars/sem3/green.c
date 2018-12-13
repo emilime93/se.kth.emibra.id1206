@@ -183,20 +183,46 @@ void green_cond_init(green_cond_t *cond) {
 }
 
 /* Suspends the process on the condition variable */
-void green_cond_wait(green_cond_t *cond) {
-    // Another one is waiting
-    
+void green_cond_wait(green_cond_t *cond, green_mutex_t *mutex) {
+    // Block timer interrupt
+    sigprocmask(SIG_BLOCK, &block, NULL);
+
     // The currently running one will be suspended
     green_t *susp = running;
-    
     // Add the waiter
     enqueue(&cond->waiting, susp);
+
+    // Release the lock if we have a mutex
+    if (mutex != NULL) {
+        mutex->taken = FALSE;
+
+        // Schedule suspended threads (move to ready)
+        enqueue(&ready_queue, mutex->susp);
+        mutex->susp = NULL;
+    }
 
     // Find next to run and run it.
     green_t *next = dequeue(&ready_queue);
     running = next;
     cond->num_susp++;
     swapcontext(susp->context, next->context);
+
+    if (mutex != NULL) {
+        // Try to take the lock
+        while (mutex->taken) {
+            // The currently running one will be suspended
+            green_t *susp = running;
+            // Add the waiter
+            enqueue(&mutex->susp, susp);
+            green_t *next = dequeue(&ready_queue);
+            running = next;
+            swapcontext(susp->context, next->context);
+        }
+        mutex->taken = TRUE;
+    }
+    sigprocmask(SIG_UNBLOCK, &block, NULL);
+
+
 }
 
 /* Signals the next waiting on the variable */
@@ -234,9 +260,6 @@ int green_mutex_init(green_mutex_t *mutex) {
     return 0;
 }
 
-volatile int lock3 = 0;
-volatile int lock4 = 0;
-volatile int lock44 = 0;
 /* Grabs the lock */
 int green_mutex_lock(green_mutex_t *mutex) {
     // Block timer interrupt
@@ -262,19 +285,10 @@ int green_mutex_lock(green_mutex_t *mutex) {
     return 0;
 }
 
-volatile int unlock3 = 0;
-volatile int unlock4 = 0;
-volatile int unlock44 = 0;
 /* Releases the lcok */
 int green_mutex_unlock(green_mutex_t *mutex) {
     // Block timer interrupt
     sigprocmask(SIG_BLOCK, &block, NULL);
-    if(*((int*)running->arg) == 3)
-        unlock3++;
-    else if (*((int*)running->arg) == 4)
-        unlock4++;
-    else
-        unlock44++;
 
     // Move suspended threads to ready queue
     if (mutex->susp != NULL) {

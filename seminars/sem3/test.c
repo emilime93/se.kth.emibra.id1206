@@ -21,9 +21,9 @@ void *test(void *arg) {
 }
 
 /* Variables for mutex test */
-green_mutex_t mutex;
-volatile int shared_counter = 0;
-int three = 0, four = 0, fortyfour = 0;
+static green_mutex_t mutex;
+static volatile int shared_counter = 0;
+static int three = 0, four = 0, fortyfour = 0;
 
 void *mutext_test(void *arg) {
     int id = ((thread_arg *) arg)->id;
@@ -45,8 +45,9 @@ void *mutext_test(void *arg) {
 }
 
 /* variables for conditionals test */
-int flag = 0;
-green_cond_t cond;
+static int flag = 0;
+static green_cond_t cond;
+static green_mutex_t cond_mutex;
 
 void *cond_test(void *arg) {
     int id = ((thread_arg *) arg)->id;
@@ -59,10 +60,35 @@ void *cond_test(void *arg) {
             flag = (id + 1) % 4;
             green_cond_signal(&cond);
         } else {
-            green_cond_wait(&cond);
+            green_cond_wait(&cond, &cond_mutex);
         }
     }
 }
+
+static green_mutex_t mutex2;
+static green_cond_t cond2;
+static int flag2 = 0;
+void *cond_test2(void *arg) {
+    int id = ((thread_arg *) arg)->id;
+    int loop = ((thread_arg *) arg)->count;
+    
+    while (loop > 0) {
+        green_mutex_lock(&mutex2);
+        while(1) {
+            if (flag2 == id) {
+                printf("%d in flag!\n", id);
+                flag2 = (id + 1) % 3;
+                green_cond_signal(&cond2);
+                green_mutex_unlock(&mutex2);
+                break;
+            } else {
+                green_cond_wait(&cond2, &mutex2);
+            }
+        }
+        loop--;
+    }
+}
+
 int main(int argc, char const *argv[]) {
     green_t g0, g1, g2, g3, g4, g44, g5, g6, g7, g8;
     thread_arg a0 = {0, 10};
@@ -93,14 +119,6 @@ int main(int argc, char const *argv[]) {
     green_join(&g3);
     green_join(&g4);
     green_join(&g44);
-    printf("three=%d | four=%d | fortyfour=%d\nTOTAL: %d\n", three, four, fortyfour, shared_counter);
-    extern int num_interrupts;
-    extern int lock3, lock4, lock44, unlock3, unlock4, unlock44;
-    printf(" === STATS === \n");
-    printf("#INT: %d\n", num_interrupts);
-    printf("3| lock: %d unlock: %d\n", lock3, unlock3);
-    printf("4| lock: %d unlock: %d\n", lock4, unlock4);
-    printf("44| lock: %d unlock: %d\n", lock44, unlock44);
     printf(" Total sum: %d\n", shared_counter);
 
     /* CONDITIONAL TEST */
@@ -113,6 +131,19 @@ int main(int argc, char const *argv[]) {
     // green_join(&g6);
     // green_join(&g7);
     // green_join(&g8);
+
+    // green_t t1, t2, t3;
+    // thread_arg ta1 = {0, 4};
+    // thread_arg ta2 = {1, 4};
+    // thread_arg ta3 = {2, 4};
+    // green_cond_init(&cond2);
+    // green_mutex_init(&mutex2);
+    // green_create(&t1, cond_test2, &ta1);
+    // green_create(&t2, cond_test2, &ta2);
+    // green_create(&t3, cond_test2, &ta3);
+    // green_join(&t1);
+    // green_join(&t2);
+    // green_join(&t3);
 
     printf("Test done!\n");
 
