@@ -1,7 +1,8 @@
 CC = gcc
 
 # Executes all tests
-all: vanilla cond locks
+all: #vanilla cond locks
+	$(info Run one of: vanilla, cond, lock)
 
 # Vanilla test
 vanilla: vanilla.o
