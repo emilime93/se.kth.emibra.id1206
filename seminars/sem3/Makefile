@@ -23,7 +23,7 @@ cond.o: cond.c green.o green.h
 	$(CC) $< -o $@ green.o -g
 
 # Lock Test
-locks: locks.o
+lock: locks.o
 	./$<
 locks.o: locks.c green.o green.h
 	$(CC) $< -o $@ green.o -g
