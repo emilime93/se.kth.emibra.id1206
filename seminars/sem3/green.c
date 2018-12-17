@@ -71,7 +71,7 @@ void timer_handler(int sig) {
     swapcontext(susp->context, next->context);
 }
 
-/* Returns the next in the ready queue. Returns the main_green thread if there the queue is empty */
+/* Returns the next in the ready queue. */
 green_t *dequeue(green_t **list) {
     if (*list == NULL) {
         printf("This should probably not happen (line 85)\n");
@@ -242,16 +242,6 @@ void green_cond_signal(green_cond_t *cond) {
 /************************************************
  *                  LOCKS                       *
  ************************************************/
-
-void push_to_list(green_t *list, green_t *thread) {
-    // If no, one's suspending on the list
-    if (list->next == NULL) {
-        list->next = thread;
-        thread->next = NULL;
-    } else {
-        push_to_list(list->next, thread);
-    }
-}
 
 /* Initializes the mutex */
 int green_mutex_init(green_mutex_t *mutex) {
