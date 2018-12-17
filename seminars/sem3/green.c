@@ -57,9 +57,9 @@ volatile int num_interrupts = 0;
 /* Handles the interrupt each period */
 void timer_handler(int sig) {
     sigprocmask(SIG_BLOCK, &block, NULL);
+    num_interrupts++;
     green_t *susp = running;
 
-    num_interrupts++;
 
     // put in ready queue 
     enqueue(&ready_queue, susp);
@@ -187,7 +187,7 @@ void green_cond_wait(green_cond_t *cond, green_mutex_t *mutex) {
     // Add the waiter
     enqueue(&cond->waiting, susp);
 
-    // Release the lock if we have a mutex
+    // Release the lock if we have a mutex, since we already have it
     if (mutex != NULL) {
         mutex->taken = FALSE;
 
@@ -200,10 +200,10 @@ void green_cond_wait(green_cond_t *cond, green_mutex_t *mutex) {
     green_t *next = dequeue(&ready_queue);
     running = next;
     cond->num_susp++;
-    // Protect the swap?
+    // Unblock so that context switching is reactivated
     sigprocmask(SIG_UNBLOCK, &block, NULL);
     swapcontext(susp->context, next->context);
-    // Protect the swap?
+    // Block again so that the operation continues to be atomic
     sigprocmask(SIG_BLOCK, &block, NULL);
 
     if (mutex != NULL) {
@@ -267,7 +267,7 @@ int green_mutex_lock(green_mutex_t *mutex) {
         sigprocmask(SIG_UNBLOCK, &block, NULL);
         swapcontext(susp->context, next->context);
         // This should be here for when the thread comes back
-        // sigprocmask(SIG_BLOCK, &block, NULL);
+        sigprocmask(SIG_BLOCK, &block, NULL);
     }
     // Take the lock
     mutex->taken = TRUE;
