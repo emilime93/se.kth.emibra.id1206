@@ -2,7 +2,7 @@ CC = gcc
 
 # Executes all tests
 all: #vanilla cond locks
-	$(info Run one of: vanilla, cond, lock)
+	$(info Run one of: vanilla, cond, lock, bench)
 
 # Benchmark
 bench: bench.o
