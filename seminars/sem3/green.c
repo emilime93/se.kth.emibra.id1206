@@ -200,7 +200,11 @@ void green_cond_wait(green_cond_t *cond, green_mutex_t *mutex) {
     green_t *next = dequeue(&ready_queue);
     running = next;
     cond->num_susp++;
+    // Protect the swap?
+    sigprocmask(SIG_UNBLOCK, &block, NULL);
     swapcontext(susp->context, next->context);
+    // Protect the swap?
+    sigprocmask(SIG_BLOCK, &block, NULL);
 
     if (mutex != NULL) {
         // Try to take the lock
@@ -259,7 +263,11 @@ int green_mutex_lock(green_mutex_t *mutex) {
         // Find the next thread
         green_t *next = dequeue(&ready_queue);
         running = next;
+        // This unblock should probably be here since a new thread will run, but there are potential issues if it gets iterrupted before the swap.
+        sigprocmask(SIG_UNBLOCK, &block, NULL);
         swapcontext(susp->context, next->context);
+        // This should be here for when the thread comes back
+        // sigprocmask(SIG_BLOCK, &block, NULL);
     }
     // Take the lock
     mutex->taken = TRUE;
@@ -270,15 +278,16 @@ int green_mutex_lock(green_mutex_t *mutex) {
     return 0;
 }
 
-/* Releases the lcok */
+/* Releases the lock */
 int green_mutex_unlock(green_mutex_t *mutex) {
     // Block timer interrupt
     sigprocmask(SIG_BLOCK, &block, NULL);
 
-    // Move suspended threads to ready queue
+    // Move a suspended thread to ready queue
+    /* One could move all threads to the queue here, but since only one may resume, it's unnecesary */
     if (mutex->susp != NULL) {
-        enqueue(&ready_queue, mutex->susp);
-        mutex->susp = NULL;
+        green_t *next = dequeue(&mutex->susp);
+        enqueue(&ready_queue, next);
     }
 
     // release lock
