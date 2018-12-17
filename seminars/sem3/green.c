@@ -73,15 +73,10 @@ void timer_handler(int sig) {
 
 /* Returns the next in the ready queue. */
 green_t *dequeue(green_t **list) {
-    if (*list == NULL) {
-        printf("This should probably not happen (line 85)\n");
-        return NULL;
-    } else {
-        green_t *thread = *list;
-        *list = (*list)->next;
-        thread->next = NULL;
-        return thread;
-    }
+    green_t *thread = *list;
+    *list = (*list)->next;
+    thread->next = NULL;
+    return thread;
 }
 
 /* adds a thread to the ready queue. */
