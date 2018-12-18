@@ -58,7 +58,6 @@ timers are automatically blocked inside this method per context */
 void timer_handler(int sig) {
     green_t *susp = running;
 
-
     // put in ready queue 
     enqueue(&ready_queue, susp);
 
