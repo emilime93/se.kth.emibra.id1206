@@ -56,7 +56,6 @@ void init() {
 volatile int num_interrupts = 0;
 /* Handles the interrupt each period */
 void timer_handler(int sig) {
-    sigprocmask(SIG_BLOCK, &block, NULL);
     num_interrupts++;
     green_t *susp = running;
 
@@ -67,7 +66,6 @@ void timer_handler(int sig) {
     // find next to execute
     green_t *next = dequeue(&ready_queue);
     running = next;
-    sigprocmask(SIG_UNBLOCK, &block, NULL);
     swapcontext(susp->context, next->context);
 }
 
@@ -200,11 +198,7 @@ void green_cond_wait(green_cond_t *cond, green_mutex_t *mutex) {
     green_t *next = dequeue(&ready_queue);
     running = next;
     cond->num_susp++;
-    // Unblock so that context switching is reactivated
-    sigprocmask(SIG_UNBLOCK, &block, NULL);
     swapcontext(susp->context, next->context);
-    // Block again so that the operation continues to be atomic
-    sigprocmask(SIG_BLOCK, &block, NULL);
 
     if (mutex != NULL) {
         // Try to take the lock
@@ -258,11 +252,7 @@ int green_mutex_lock(green_mutex_t *mutex) {
         // Find the next thread
         green_t *next = dequeue(&ready_queue);
         running = next;
-        // This unblock should probably be here since a new thread will run, but there are potential issues if it gets iterrupted before the swap.
-        sigprocmask(SIG_UNBLOCK, &block, NULL);
         swapcontext(susp->context, next->context);
-        // This should be here for when the thread comes back
-        sigprocmask(SIG_BLOCK, &block, NULL);
     }
     // Take the lock
     mutex->taken = TRUE;
