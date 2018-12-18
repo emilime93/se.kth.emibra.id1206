@@ -220,17 +220,13 @@ void green_cond_wait(green_cond_t *cond, green_mutex_t *mutex) {
         mutex->taken = TRUE;
     }
     sigprocmask(SIG_UNBLOCK, &block, NULL);
-
-
 }
 
 /* Signals the next waiting on the variable */
 void green_cond_signal(green_cond_t *cond) {
     if (cond->num_susp == 0) {
-        assert(cond->waiting == NULL);
         return;
     }
-    assert(cond->waiting != NULL && cond->num_susp > 0);
     green_t *old = cond->waiting;
     cond->waiting = old->next;
 
@@ -255,7 +251,6 @@ int green_mutex_lock(green_mutex_t *mutex) {
     sigprocmask(SIG_BLOCK, &block, NULL);
 
     green_t *susp = running;
-
     while(mutex->taken) {
         // Suspend the running thread
         enqueue(&mutex->susp, susp);
