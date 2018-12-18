@@ -53,10 +53,9 @@ void init() {
     setitimer(ITIMER_VIRTUAL, &period, NULL);
 }
 
-volatile int num_interrupts = 0;
-/* Handles the interrupt each period */
+/* Handles the interrupt each period 
+timers are automatically blocked inside this method per context */
 void timer_handler(int sig) {
-    num_interrupts++;
     green_t *susp = running;
 
 
